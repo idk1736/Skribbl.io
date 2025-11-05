@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
+import Card from "./ui/Card";
 
 export default function Canvas({ socket, isDrawer }) {
   const canvasRef = useRef();
@@ -14,59 +15,67 @@ export default function Canvas({ socket, isDrawer }) {
     ctx.strokeStyle = "black";
     ctxRef.current = ctx;
 
-    socket.on("draw", ({ x0, y0, x1, y1 }) => {
+    // Listen for drawing events from other players
+    socket?.on("draw", ({ x0, y0, x1, y1 }) => {
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
       ctx.stroke();
     });
 
-    socket.on("clearCanvas", () => {
+    socket?.on("clearCanvas", () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
   }, [socket]);
 
-  const startDraw = (e) => {
+  const startDrawing = (e) => {
     if (!isDrawer) return;
     setIsDrawing(true);
     draw(e);
   };
 
-  const endDraw = () => setIsDrawing(false);
+  const endDrawing = () => setIsDrawing(false);
 
   const draw = (e) => {
     if (!isDrawing || !isDrawer) return;
+
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.nativeEvent.offsetX || e.touches?.[0].clientX - rect.left;
     const y = e.nativeEvent.offsetY || e.touches?.[0].clientY - rect.top;
+
     const ctx = ctxRef.current;
     ctx.lineTo(x, y);
     ctx.stroke();
-    socket.emit("draw", { x0: x, y0: y, x1: x, y1: y });
+
+    socket?.emit("draw", { x0: x, y0: y, x1: x, y1: y });
+  };
+
+  const clearCanvas = () => {
+    socket?.emit("clearCanvas");
   };
 
   return (
-    <div className="flex flex-col w-full md:w-2/3">
+    <Card className="flex-1 p-2">
       <canvas
         ref={canvasRef}
         width={600}
         height={400}
-        className={`border rounded-2xl bg-white shadow ${!isDrawer ? "opacity-60" : ""}`}
-        onMouseDown={startDraw}
-        onMouseUp={endDraw}
+        className={`border-4 border-purple rounded-2xl bg-white shadow-lg w-full touch-none`}
+        onMouseDown={startDrawing}
+        onMouseUp={endDrawing}
         onMouseMove={draw}
-        onTouchStart={startDraw}
-        onTouchEnd={endDraw}
+        onTouchStart={startDrawing}
+        onTouchEnd={endDrawing}
         onTouchMove={draw}
       />
       {isDrawer && (
         <button
-          className="bg-red-500 text-white px-4 py-2 rounded mt-2 self-end"
-          onClick={() => socket.emit("clearCanvas")}
+          className="mt-2 bg-red-400 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-2xl shadow-lg w-full"
+          onClick={clearCanvas}
         >
-          Clear
+          Clear Canvas
         </button>
       )}
-    </div>
+    </Card>
   );
 }
