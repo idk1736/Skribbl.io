@@ -1,18 +1,17 @@
-import React, { useState } from "react";
-import Lobby from "./components/Lobby";
-import Game from "./components/Game";
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
+import Lobby from "./pages/Lobby";
+import Game from "./pages/Game";
 
 export default function App() {
-  const [roomId, setRoomId] = useState(null);
-  const [username, setUsername] = useState("");
-
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      {!roomId ? (
-        <Lobby setRoomId={setRoomId} setUsername={setUsername} />
-      ) : (
-        <Game roomId={roomId} username={username} />
-      )}
+    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-pink-100 flex justify-center items-center">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/lobby/:roomId" element={<Lobby />} />
+        <Route path="/game/:roomId" element={<Game />} />
+      </Routes>
     </div>
   );
 }
