@@ -1,13 +1,6 @@
 import { io } from "socket.io-client";
 
-let socket;
+// replace with your deployed server URL if not localhost
+const SERVER_URL = "https://skribbl-io-orcin.vercel.app"; 
 
-export const initSocket = () => {
-  if (!socket) {
-    // Replace with your Vercel deployment URL
-    socket = io("https://skribbl-io-orcin.vercel.app", {
-      path: "/api/socket",
-    });
-  }
-  return socket;
-};
+export const initSocket = () => io(SERVER_URL);
