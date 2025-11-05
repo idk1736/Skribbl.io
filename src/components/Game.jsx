@@ -3,12 +3,13 @@ import Canvas from "./Canvas";
 import Chat from "./Chat";
 import { initSocket } from "../utils/socket";
 
-export default function Game({ roomId, username }) {
+export default function Game({ username, roomId }) {
   const [socket, setSocket] = useState(null);
   const [players, setPlayers] = useState([]);
-  const [drawer, setDrawer] = useState("");
+  const [drawer, setDrawer] = useState(null);
   const [word, setWord] = useState("");
-  const [gameStarted, setGameStarted] = useState(false);
+  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     const s = initSocket();
@@ -16,71 +17,45 @@ export default function Game({ roomId, username }) {
 
     s.emit("joinRoom", { roomId, username });
 
-    s.on("updatePlayers", (playerList) => {
-      setPlayers(playerList);
-    });
+    s.on("updatePlayers", setPlayers);
+    s.on("setDrawer", setDrawer);
+    s.on("newWord", (newWord) => setWord(newWord));
+    s.on("chatMessage", (msg) => setMessages((prev) => [...prev, msg]));
+    s.on("correctGuess", (msg) =>
+      setMessages((prev) => [...prev, { system: true, text: msg }])
+    );
+    s.on("gameStarted", () => setIsGameStarted(true));
 
-    s.on("setDrawer", (drawerName) => {
-      setDrawer(drawerName);
-    });
+    return () => s.disconnect();
+  }, [roomId, username]);
 
-    s.on("newWord", (newWord) => {
-      setWord(newWord);
-    });
-
-    s.on("gameStarted", () => {
-      setGameStarted(true);
-    });
-
-    return () => {
-      s.disconnect();
-    };
-  }, []);
-
-  const startGame = () => {
-    if (socket) socket.emit("startGame");
-  };
+  const startGame = () => socket?.emit("startGame");
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col md:flex-row gap-4 p-4">
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow p-4">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="font-bold text-lg">Room: {roomId}</h2>
-          <button
-            onClick={startGame}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-          >
-            Start Game
-          </button>
-        </div>
+    <div className="flex flex-col items-center p-4">
+      <h2 className="text-xl font-bold mb-2">Room: {roomId}</h2>
+      <p className="mb-4">Players: {players.join(", ")}</p>
 
-        <div className="mb-2">
-          <strong>Drawer:</strong> {drawer}
-        </div>
+      {drawer === username && word ? (
+        <p className="mb-2">🎨 You are drawing: <strong>{word}</strong></p>
+      ) : (
+        <p className="mb-2">
+          {drawer ? `🖌️ ${drawer} is drawing...` : "Waiting for game to start..."}
+        </p>
+      )}
 
-        <div className="mb-2">
-          {drawer === username ? (
-            <span>
-              Draw this word: <strong>{word}</strong>
-            </span>
-          ) : (
-            <span>Guess the word!</span>
-          )}
-        </div>
+      {!isGameStarted && (
+        <button
+          className="bg-green-500 text-white px-4 py-2 rounded mb-4"
+          onClick={startGame}
+        >
+          Start Game
+        </button>
+      )}
 
+      <div className="flex flex-col md:flex-row gap-4 w-full max-w-5xl">
         <Canvas socket={socket} isDrawer={drawer === username} />
-      </div>
-
-      <div className="w-full md:w-80 flex flex-col bg-white rounded-xl shadow p-4">
-        <Chat socket={socket} username={username} />
-        <div className="mt-4">
-          <h3 className="font-bold mb-2">Players:</h3>
-          <ul className="list-disc list-inside">
-            {players.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </div>
+        <Chat socket={socket} username={username} messages={messages} />
       </div>
     </div>
   );
