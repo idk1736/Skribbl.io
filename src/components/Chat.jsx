@@ -1,67 +1,45 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-export default function Chat({ socket, username }) {
-  const [messages, setMessages] = useState([]);
+export default function Chat({ socket, username, messages }) {
   const [input, setInput] = useState("");
-  const messagesEndRef = useRef(null);
+  const chatEndRef = useRef();
 
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on("chatMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-    });
-
-    socket.on("correctGuess", (msg) => {
-      setMessages((prev) => [...prev, { system: true, text: msg }]);
-    });
-
-    return () => {
-      socket.off("chatMessage");
-      socket.off("correctGuess");
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = () => {
-    if (!input.trim() || !socket) return;
-    socket.emit("chatMessage", { username, text: input });
-    setInput("");
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") sendMessage();
+    if (input.trim()) {
+      socket.emit("chatMessage", { username, text: input.trim() });
+      setInput("");
+    }
   };
 
   return (
-    <div className="flex flex-col h-96">
-      <div className="flex-1 overflow-y-auto border rounded p-2 mb-2 bg-gray-50">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={msg.system ? "text-green-600 italic" : "text-gray-800"}
-          >
-            {msg.system ? msg.text : <strong>{msg.username}:</strong>}{" "}
-            {!msg.system && msg.text}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
+    <div className="w-full md:w-1/3 bg-gray-100 p-4 rounded-2xl shadow flex flex-col">
+      <h3 className="font-bold mb-2">Chat</h3>
+      <div className="flex-1 overflow-y-auto mb-2 border rounded p-2 bg-white">
+        {messages.map((m, i) =>
+          m.system ? (
+            <p key={i} className="text-sm text-center text-blue-500 italic">{m.text}</p>
+          ) : (
+            <p key={i}>
+              <strong>{m.username}: </strong>{m.text}
+            </p>
+          )
+        )}
+        <div ref={chatEndRef} />
       </div>
       <div className="flex gap-2">
         <input
-          type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyPress}
           className="flex-1 border p-2 rounded"
           placeholder="Type your guess..."
         />
         <button
           onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          className="bg-blue-500 text-white px-4 py-2 rounded"
         >
           Send
         </button>
