@@ -3,11 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Skribbl Clone</title>
-    <link href="/dist/output.css" rel="stylesheet">
+    <title>Skribbl Clone - Cartoony iPad</title>
+
+    <!-- Google Fonts: Comic Neue & Fredoka One -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Fredoka+One&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Comic Neue", "sans-serif"],
+              display: ["Fredoka One", "cursive"]
+            },
+            colors: {
+              pink: "#FF6B81",
+              yellow: "#FFD93D",
+              blue: "#6BCBFF",
+              green: "#6BFFB8",
+              purple: "#CBA6FF"
+            },
+          },
+        },
+      };
+    </script>
   </head>
-  <body>
+
+  <body class="bg-blue-100 font-sans min-h-screen flex justify-center items-center">
     <div id="root"></div>
+
+    <!-- React + Vite entry -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
