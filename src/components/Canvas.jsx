@@ -1,96 +1,68 @@
 import React, { useRef, useEffect, useState } from "react";
 
 export default function Canvas({ socket, isDrawer }) {
-  const canvasRef = useRef(null);
-  const [drawing, setDrawing] = useState(false);
-  const [ctx, setCtx] = useState(null);
+  const canvasRef = useRef();
+  const ctxRef = useRef();
+  const [isDrawing, setIsDrawing] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    const context = canvas.getContext("2d");
-    context.lineCap = "round";
-    context.lineWidth = 4;
-    context.strokeStyle = "#000";
-    setCtx(context);
-  }, []);
+    const ctx = canvas.getContext("2d");
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "black";
+    ctxRef.current = ctx;
 
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on("draw", ({ x0, y0, x1, y1, color }) => {
-      drawLine(x0, y0, x1, y1, color, false);
+    socket.on("draw", ({ x0, y0, x1, y1 }) => {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
     });
 
-    return () => socket.off("draw");
-  }, [socket, ctx]);
-
-  const startDrawing = ({ nativeEvent }) => {
-    if (!isDrawer) return;
-    const { offsetX, offsetY } = nativeEvent;
-    setDrawing(true);
-    setLastPos({ x: offsetX, y: offsetY });
-  };
-
-  const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
-
-  const stopDrawing = () => {
-    if (!isDrawer) return;
-    setDrawing(false);
-  };
-
-  const draw = ({ nativeEvent }) => {
-    if (!drawing || !ctx || !isDrawer) return;
-    const { offsetX, offsetY } = nativeEvent;
-    drawLine(lastPos.x, lastPos.y, offsetX, offsetY, "#000", true);
-    setLastPos({ x: offsetX, y: offsetY });
-  };
-
-  const drawLine = (x0, y0, x1, y1, color, emit) => {
-    if (!ctx) return;
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.closePath();
-
-    if (!emit || !socket) return;
-    socket.emit("draw", { x0, y0, x1, y1, color });
-  };
-
-  const clearCanvas = () => {
-    if (!ctx || !isDrawer) return;
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    if (socket) socket.emit("clearCanvas");
-  };
-
-  useEffect(() => {
-    if (!socket) return;
     socket.on("clearCanvas", () => {
-      if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
-    return () => socket.off("clearCanvas");
-  }, [socket, ctx]);
+  }, [socket]);
+
+  const startDraw = (e) => {
+    if (!isDrawer) return;
+    setIsDrawing(true);
+    draw(e);
+  };
+
+  const endDraw = () => setIsDrawing(false);
+
+  const draw = (e) => {
+    if (!isDrawing || !isDrawer) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.nativeEvent.offsetX || e.touches?.[0].clientX - rect.left;
+    const y = e.nativeEvent.offsetY || e.touches?.[0].clientY - rect.top;
+    const ctx = ctxRef.current;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    socket.emit("draw", { x0: x, y0: y, x1: x, y1: y });
+  };
 
   return (
-    <div className="flex flex-col flex-1 h-96 border rounded overflow-hidden">
+    <div className="flex flex-col w-full md:w-2/3">
       <canvas
         ref={canvasRef}
-        className="flex-1 w-full h-full"
-        onMouseDown={startDrawing}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
+        width={600}
+        height={400}
+        className={`border rounded-2xl bg-white shadow ${!isDrawer ? "opacity-60" : ""}`}
+        onMouseDown={startDraw}
+        onMouseUp={endDraw}
         onMouseMove={draw}
-        onTouchStart={(e) => startDrawing({ nativeEvent: e.touches[0] })}
-        onTouchMove={(e) => draw({ nativeEvent: e.touches[0] })}
-        onTouchEnd={stopDrawing}
+        onTouchStart={startDraw}
+        onTouchEnd={endDraw}
+        onTouchMove={draw}
       />
       {isDrawer && (
         <button
-          onClick={clearCanvas}
-          className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          className="bg-red-500 text-white px-4 py-2 rounded mt-2 self-end"
+          onClick={() => socket.emit("clearCanvas")}
         >
           Clear
         </button>
