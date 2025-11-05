@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import Card from "./ui/Card";
+import Button from "./ui/Button";
 
 export default function Chat({ socket, username, messages }) {
   const [input, setInput] = useState("");
@@ -9,41 +11,52 @@ export default function Chat({ socket, username, messages }) {
   }, [messages]);
 
   const sendMessage = () => {
-    if (input.trim()) {
-      socket.emit("chatMessage", { username, text: input.trim() });
-      setInput("");
-    }
+    if (input.trim() === "") return;
+    socket?.emit("chatMessage", { username, text: input.trim() });
+    setInput("");
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter") sendMessage();
   };
 
   return (
-    <div className="w-full md:w-1/3 bg-gray-100 p-4 rounded-2xl shadow flex flex-col">
-      <h3 className="font-bold mb-2">Chat</h3>
-      <div className="flex-1 overflow-y-auto mb-2 border rounded p-2 bg-white">
-        {messages.map((m, i) =>
-          m.system ? (
-            <p key={i} className="text-sm text-center text-blue-500 italic">{m.text}</p>
+    <Card className="w-full md:w-1/3 flex flex-col p-2">
+      <div className="flex-1 overflow-y-auto mb-2 space-y-1 p-2 bg-blue-50 rounded-xl">
+        {messages.map((msg, i) =>
+          msg.system ? (
+            <div
+              key={i}
+              className="bg-yellow-200 text-center text-gray-800 rounded-xl p-2 text-sm italic"
+            >
+              {msg.text}
+            </div>
           ) : (
-            <p key={i}>
-              <strong>{m.username}: </strong>{m.text}
-            </p>
+            <div
+              key={i}
+              className={`p-2 rounded-xl ${
+                msg.username === username ? "bg-green-200 self-end" : "bg-white"
+              }`}
+            >
+              <strong>{msg.username}:</strong> {msg.text}
+            </div>
           )
         )}
-        <div ref={chatEndRef} />
+        <div ref={chatEndRef}></div>
       </div>
-      <div className="flex gap-2">
+
+      <div className="flex gap-2 mt-2">
         <input
+          className="flex-1 p-2 rounded-xl border-2 border-purple focus:outline-none focus:border-pink text-lg"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="flex-1 border p-2 rounded"
+          onKeyDown={handleKeyPress}
           placeholder="Type your guess..."
         />
-        <button
-          onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
+        <Button onClick={sendMessage} className="bg-blue">
           Send
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
