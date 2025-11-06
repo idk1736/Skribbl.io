@@ -12,21 +12,39 @@ export default function Lobby() {
 
   const [socket, setSocket] = useState(null);
   const [players, setPlayers] = useState([]);
-  const [hostId, setHostId] = useState(null);
+  const [host, setHost] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [drawer, setDrawer] = useState(null);
 
   useEffect(() => {
     const s = initSocket();
     setSocket(s);
 
     // Join the room
-    s.emit("joinRoom", { roomId, username });
+    s.emit("join-room", { roomCode: roomId, username });
 
-    // Update players list
-    s.on("updatePlayers", (playerList) => {
-      setPlayers(playerList);
+    // Listen for player list updates
+    s.on("player-list", (playerList) => {
+      setPlayers(playerList.map((p) => p.username));
+      if (!host && playerList.length) setHost(playerList[0].username);
+    });
 
-      // The first player to join becomes host
-      if (!hostId && playerList.length) setHostId(playerList[0]);
+    // Listen for drawer assignment
+    s.on("you-are-drawer", ({ word }) => {
+      setDrawer(username);
+    });
+
+    s.on("new-drawer", ({ drawer: drawerName }) => {
+      setDrawer(drawerName);
+    });
+
+    // Chat and system messages
+    s.on("chat-message", (msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    s.on("correct-guess", ({ username: winner }) => {
+      setMessages((prev) => [...prev, { system: true, text: `${winner} guessed the word! 🎉` }]);
     });
 
     // Game started -> navigate to game page
@@ -34,14 +52,17 @@ export default function Lobby() {
       navigate(`/game/${roomId}`, { state: { username } });
     });
 
-    return () => s.disconnect();
+    // Cleanup on unmount
+    return () => {
+      s.disconnect();
+    };
   }, []);
 
   const startGame = () => {
     if (socket) socket.emit("startGame");
   };
 
-  const isHost = players[0] === username;
+  const isHost = host === username;
 
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-md p-4 gap-6">
@@ -56,10 +77,10 @@ export default function Lobby() {
             <li
               key={p}
               className={`p-2 rounded-xl ${
-                p === players[0] ? "bg-yellow font-bold" : "bg-blue-200"
+                p === host ? "bg-yellow font-bold" : "bg-blue-200"
               }`}
             >
-              {p} {p === players[0] ? "(Host)" : ""}
+              {p} {p === host ? "(Host)" : ""} {p === drawer ? "🎨" : ""}
             </li>
           ))}
         </ul>
@@ -75,6 +96,17 @@ export default function Lobby() {
             ? "Start Game"
             : "Waiting for host..."}
         </Button>
+      </Card>
+
+      <Card className="w-full flex flex-col gap-2">
+        <h3 className="text-lg font-bold">Lobby Chat</h3>
+        <ul className="flex flex-col gap-1 max-h-32 overflow-y-auto p-2 border rounded">
+          {messages.map((m, i) => (
+            <li key={i} className={m.system ? "italic text-gray-500" : ""}>
+              {m.system ? m.text : `${m.username}: ${m.message}`}
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <p className="text-center text-gray-600">
