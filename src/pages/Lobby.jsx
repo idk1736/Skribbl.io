@@ -4,19 +4,6 @@ import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import { initSocket } from "../utils/socket";
 
-// Assuming you're using socket.io-client on the frontend
-const socket = io();  // Connect to the server
-
-// Get reference to the start button
-const startButton = document.getElementById("startButton");
-
-startButton.addEventListener('click', () => {
-    // Emit an event to the backend to start the game
-    const roomCode = getRoomCode();  // You may need to get the room code dynamically
-    socket.emit('start-game', { roomCode });
-});
-
-
 export default function Lobby() {
   const { roomId } = useParams();
   const location = useLocation();
