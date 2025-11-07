@@ -24,7 +24,7 @@ export default function Lobby() {
     // Join the room
     s.emit("join-room", { roomCode: roomId, username });
 
-    // Player list updates
+    // Update player list
     s.on("player-list", (playerList) => {
       setPlayers(playerList.map((p) => p.username));
       if (!host && playerList.length) setHost(playerList[0].username);
@@ -56,9 +56,8 @@ export default function Lobby() {
   }, []);
 
   const startGame = () => {
-    if (socket) {
-      socket.emit("startGame");
-    }
+    if (!socket) return;
+    socket.emit("startGame");
   };
 
   const sendMessage = () => {
@@ -95,7 +94,9 @@ export default function Lobby() {
           <Button
             onClick={startGame}
             disabled={!isHost || players.length < 2}
-            className={`mt-4 ${isHost ? "bg-green" : "bg-gray-400 cursor-not-allowed"}`}
+            className={`mt-4 ${
+              isHost ? "bg-green" : "bg-gray-400 cursor-not-allowed"
+            }`}
           >
             {players.length < 2
               ? "Waiting for players..."
@@ -110,7 +111,7 @@ export default function Lobby() {
       <div className="flex flex-col w-full md:w-1/2 gap-2">
         <Card className="flex flex-col gap-2 h-full">
           <h3 className="text-lg font-bold">Lobby Chat</h3>
-          <ul className="flex flex-col gap-1 flex-1 overflow-y-auto p-2 border rounded min-h-[300px] max-h-[600px]">
+          <ul className="flex flex-col gap-1 flex-1 overflow-y-auto p-2 border rounded max-h-[500px]">
             {messages.map((m, i) => (
               <li key={i} className={m.system ? "italic text-gray-500" : ""}>
                 {m.system ? m.text : `${m.username}: ${m.message}`}
