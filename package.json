@@ -1,6 +1,6 @@
 {
   "name": "skribbl-clone",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.17.0",
-    "socket.io-client": "^4.8.0"
+    "socket.io-client": "^4.8.0",
+    "framer-motion": "^10.12.16"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
