@@ -24,22 +24,17 @@ export default function Lobby() {
     // Join the room
     s.emit("join-room", { roomCode: roomId, username });
 
-    // Listen for player list updates
+    // Player list updates
     s.on("player-list", (playerList) => {
       setPlayers(playerList.map((p) => p.username));
       if (!host && playerList.length) setHost(playerList[0].username);
     });
 
-    // Listen for drawer assignment
-    s.on("you-are-drawer", ({ word }) => {
-      setDrawer(username);
-    });
+    // Drawer updates
+    s.on("you-are-drawer", () => setDrawer(username));
+    s.on("new-drawer", ({ drawer: drawerName }) => setDrawer(drawerName));
 
-    s.on("new-drawer", ({ drawer: drawerName }) => {
-      setDrawer(drawerName);
-    });
-
-    // Lobby chat messages
+    // Lobby chat
     s.on("chat-message", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
@@ -49,19 +44,18 @@ export default function Lobby() {
       setMessages((prev) => [...prev, { system: true, text: `${winner} guessed the word! 🎉` }]);
     });
 
-    // Game started -> navigate to game page
-    s.on("game-started", () => {
+    // Game started
+    s.on("gameStarted", () => {
       navigate(`/game/${roomId}`, { state: { username } });
     });
 
-    return () => {
-      s.disconnect();
-    };
+    return () => s.disconnect();
   }, []);
 
   const startGame = () => {
     if (socket) {
-      socket.emit("start-game", { roomCode: roomId });
+      // emit the correct event your backend listens for
+      socket.emit("startGame");
     }
   };
 
@@ -74,64 +68,66 @@ export default function Lobby() {
   const isHost = host === username;
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-md p-4 gap-6">
-      <h2 className="text-3xl font-display text-purple text-center">
-        Lobby: {roomId}
-      </h2>
+    <div className="flex flex-col md:flex-row items-start justify-center w-full max-w-6xl p-4 gap-6">
+      {/* Left side: Player list + start button */}
+      <div className="flex flex-col w-full md:w-1/2 gap-6">
+        <Card className="w-full flex flex-col gap-4">
+          <h2 className="text-3xl font-display text-purple text-center">
+            Lobby: {roomId}
+          </h2>
 
-      <Card className="w-full flex flex-col gap-4">
-        <h3 className="text-xl font-bold text-pink">Players</h3>
-        <ul className="flex flex-col gap-2">
-          {players.map((p) => (
-            <li
-              key={p}
-              className={`p-2 rounded-xl ${
-                p === host ? "bg-yellow font-bold" : "bg-blue-200"
-              }`}
-            >
-              {p} {p === host ? "(Host)" : ""} {p === drawer ? "🎨" : ""}
-            </li>
-          ))}
-        </ul>
+          <h3 className="text-xl font-bold text-pink">Players</h3>
+          <ul className="flex flex-col gap-2">
+            {players.map((p) => (
+              <li
+                key={p}
+                className={`p-2 rounded-xl ${
+                  p === host ? "bg-yellow font-bold" : "bg-blue-200"
+                }`}
+              >
+                {p} {p === host ? "(Host)" : ""} {p === drawer ? "🎨" : ""}
+              </li>
+            ))}
+          </ul>
 
-        <Button
-          onClick={startGame}
-          disabled={!isHost || players.length < 2}
-          className={`mt-4 ${isHost ? "bg-green" : "bg-gray-400 cursor-not-allowed"}`}
-        >
-          {players.length < 2
-            ? "Waiting for players..."
-            : isHost
-            ? "Start Game"
-            : "Waiting for host..."}
-        </Button>
-      </Card>
+          <Button
+            onClick={startGame}
+            disabled={!isHost || players.length < 2}
+            className={`mt-4 ${isHost ? "bg-green" : "bg-gray-400 cursor-not-allowed"}`}
+          >
+            {players.length < 2
+              ? "Waiting for players..."
+              : isHost
+              ? "Start Game"
+              : "Waiting for host..."}
+          </Button>
+        </Card>
+      </div>
 
-      <Card className="w-full flex flex-col gap-2">
-        <h3 className="text-lg font-bold">Lobby Chat</h3>
-        <ul className="flex flex-col gap-1 max-h-32 overflow-y-auto p-2 border rounded">
-          {messages.map((m, i) => (
-            <li key={i} className={m.system ? "italic text-gray-500" : ""}>
-              {m.system ? m.text : `${m.username}: ${m.message}`}
-            </li>
-          ))}
-        </ul>
-        <div className="flex gap-2 mt-2">
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            className="flex-1 p-2 border rounded"
-            placeholder="Type a message..."
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          />
-          <Button onClick={sendMessage}>Send</Button>
-        </div>
-      </Card>
-
-      <p className="text-center text-gray-600">
-        Share this room code with friends to join: <strong>{roomId}</strong>
-      </p>
+      {/* Right side: Lobby chat */}
+      <div className="flex flex-col w-full md:w-1/2 gap-2">
+        <Card className="flex flex-col gap-2 h-full">
+          <h3 className="text-lg font-bold">Lobby Chat</h3>
+          <ul className="flex flex-col gap-1 flex-1 overflow-y-auto p-2 border rounded max-h-[400px]">
+            {messages.map((m, i) => (
+              <li key={i} className={m.system ? "italic text-gray-500" : ""}>
+                {m.system ? m.text : `${m.username}: ${m.message}`}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 mt-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              className="flex-1 p-2 border rounded"
+              placeholder="Type a message..."
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            />
+            <Button onClick={sendMessage}>Send</Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
