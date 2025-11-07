@@ -13,8 +13,9 @@ export default function Lobby() {
   const [socket, setSocket] = useState(null);
   const [players, setPlayers] = useState([]);
   const [host, setHost] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [drawer, setDrawer] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
 
   useEffect(() => {
     const s = initSocket();
@@ -38,28 +39,36 @@ export default function Lobby() {
       setDrawer(drawerName);
     });
 
-    // Chat and system messages
+    // Lobby chat messages
     s.on("chat-message", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
 
+    // Correct guesses
     s.on("correct-guess", ({ username: winner }) => {
       setMessages((prev) => [...prev, { system: true, text: `${winner} guessed the word! 🎉` }]);
     });
 
     // Game started -> navigate to game page
-    s.on("gameStarted", () => {
+    s.on("game-started", () => {
       navigate(`/game/${roomId}`, { state: { username } });
     });
 
-    // Cleanup on unmount
     return () => {
       s.disconnect();
     };
   }, []);
 
   const startGame = () => {
-    if (socket) socket.emit("startGame");
+    if (socket) {
+      socket.emit("start-game", { roomCode: roomId });
+    }
+  };
+
+  const sendMessage = () => {
+    if (!chatInput.trim() || !socket) return;
+    socket.emit("chat-message", { message: chatInput });
+    setChatInput("");
   };
 
   const isHost = host === username;
@@ -107,6 +116,17 @@ export default function Lobby() {
             </li>
           ))}
         </ul>
+        <div className="flex gap-2 mt-2">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            className="flex-1 p-2 border rounded"
+            placeholder="Type a message..."
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+          <Button onClick={sendMessage}>Send</Button>
+        </div>
       </Card>
 
       <p className="text-center text-gray-600">
