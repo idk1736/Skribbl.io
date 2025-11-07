@@ -41,7 +41,10 @@ export default function Lobby() {
 
     // Correct guesses
     s.on("correct-guess", ({ username: winner }) => {
-      setMessages((prev) => [...prev, { system: true, text: `${winner} guessed the word! 🎉` }]);
+      setMessages((prev) => [
+        ...prev,
+        { system: true, text: `${winner} guessed the word! 🎉` },
+      ]);
     });
 
     // Game started
@@ -54,7 +57,6 @@ export default function Lobby() {
 
   const startGame = () => {
     if (socket) {
-      // emit the correct event your backend listens for
       socket.emit("startGame");
     }
   };
@@ -108,7 +110,7 @@ export default function Lobby() {
       <div className="flex flex-col w-full md:w-1/2 gap-2">
         <Card className="flex flex-col gap-2 h-full">
           <h3 className="text-lg font-bold">Lobby Chat</h3>
-          <ul className="flex flex-col gap-1 flex-1 overflow-y-auto p-2 border rounded max-h-[400px]">
+          <ul className="flex flex-col gap-1 flex-1 overflow-y-auto p-2 border rounded min-h-[300px] max-h-[600px]">
             {messages.map((m, i) => (
               <li key={i} className={m.system ? "italic text-gray-500" : ""}>
                 {m.system ? m.text : `${m.username}: ${m.message}`}
