@@ -1,97 +1,112 @@
-// src/pages/Game.jsx
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
+import { initSocket } from "../utils/socket";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
-import { initSocket } from "../utils/socket";
 
-// Canvas wrapper to expose drawing methods to parent
-const CanvasWrapper = forwardRef(({ socket, isDrawer, roomId }, ref) => {
+// Canvas drawing component
+function Canvas({ socket, isDrawer, width, height }) {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const drawing = useRef(false);
-  const path = useRef([]);
-
-  useImperativeHandle(ref, () => ({
-    drawFromData: (data) => {
-      if (!ctxRef.current) return;
-      data.forEach(({ x, y, type }) => {
-        if (type === "begin") ctxRef.current.beginPath();
-        if (type === "line") ctxRef.current.lineTo(x, y);
-        if (type === "end") ctxRef.current.stroke();
-      });
-    },
-    clear: () => ctxRef.current && ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height),
-  }));
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext("2d");
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctxRef.current = ctx;
 
-    const handleResize = () => {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      ctx.putImageData(imageData, 0, 0);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    // Listen for remote drawing
+    socket.on("drawing", ({ x0, y0, x1, y1, color }) => {
+      ctx.strokeStyle = color || "black";
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.closePath();
+    });
 
-  useEffect(() => {
-    if (!socket || !isDrawer) return;
-
-    const emitDraw = () => {
-      socket.emit("drawing-data", { path: path.current, roomId });
-    };
-
-    const canvas = canvasRef.current;
-
-    const start = (e) => {
-      drawing.current = true;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      path.current.push({ x, y, type: "begin" });
-    };
-    const draw = (e) => {
-      if (!drawing.current) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      path.current.push({ x, y, type: "line" });
-      ctxRef.current.lineTo(x, y);
-      ctxRef.current.stroke();
-      emitDraw();
-    };
-    const end = () => {
-      drawing.current = false;
-      path.current.push({ type: "end" });
-      emitDraw();
-      path.current = [];
-    };
-
-    canvas.addEventListener("mousedown", start);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", end);
-    canvas.addEventListener("mouseleave", end);
+    // Clear canvas on round reset
+    socket.on("clear-canvas", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
 
     return () => {
-      canvas.removeEventListener("mousedown", start);
-      canvas.removeEventListener("mousemove", draw);
-      canvas.removeEventListener("mouseup", end);
-      canvas.removeEventListener("mouseleave", end);
+      socket.off("drawing");
+      socket.off("clear-canvas");
     };
-  }, [socket, isDrawer, roomId]);
+  }, [socket, width, height]);
 
-  return <canvas ref={canvasRef} className="w-full h-96 md:h-[500px] border rounded shadow-md bg-white" />;
-});
+  const handleMouseDown = (e) => {
+    if (!isDrawer) return;
+    drawing.current = true;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    socket._lastPos = { x, y };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDrawer || !drawing.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const { x: x0, y: y0 } = socket._lastPos || { x, y };
+
+    // Emit drawing
+    socket.emit("drawing", { x0, y0, x1: x, y1: y, color: "black" });
+
+    // Local draw
+    const ctx = ctxRef.current;
+    ctx.strokeStyle = "black";
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.closePath();
+
+    socket._lastPos = { x, y };
+  };
+
+  const handleMouseUp = () => {
+    drawing.current = false;
+    socket._lastPos = null;
+  };
+
+  const handleTouchStart = (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+  };
+
+  const handleTouchEnd = (e) => {
+    e.preventDefault();
+    handleMouseUp();
+  };
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="border rounded w-full md:w-[600px] h-[400px] touch-none md:touch-auto"
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    />
+  );
+}
 
 export default function Game() {
   const { roomId } = useParams();
@@ -101,167 +116,157 @@ export default function Game() {
   const [socket, setSocket] = useState(null);
   const [players, setPlayers] = useState([]);
   const [drawer, setDrawer] = useState(null);
-  const [currentWord, setCurrentWord] = useState("");
+  const [word, setWord] = useState("");
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [round, setRound] = useState(1);
-  const [maxRounds, setMaxRounds] = useState(5);
-  const [scores, setScores] = useState({});
-  const [hints, setHints] = useState([]);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [scoreboard, setScoreboard] = useState([]);
+  const [announcement, setAnnouncement] = useState("");
 
-  const chatRef = useRef();
-  const canvasRef = useRef();
+  const chatEndRef = useRef(null);
 
-  const isDrawer = drawer === username;
-
-  // Auto-scroll chat
+  // Scroll chat to bottom
   useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
     const s = initSocket();
     setSocket(s);
 
+    // Join room
     s.emit("join-room", { roomCode: roomId, username });
 
-    s.on("player-list", (list) => setPlayers(list));
+    // Player updates
+    s.on("player-list", (list) => {
+      setPlayers(list);
+      setScoreboard(list.map(p => ({ username: p.username, score: p.score || 0 })));
+      const currentDrawer = list.find(p => p.isDrawer);
+      setDrawer(currentDrawer?.username || null);
+    });
 
+    // Chat
+    s.on("chat-message", (msg) => setMessages(prev => [...prev, msg]));
+    s.on("announcement", (msg) => setAnnouncement(msg));
+
+    // Drawer updates
     s.on("you-are-drawer", ({ word }) => {
       setDrawer(username);
-      setCurrentWord(word);
-      setHints(generateHints(word));
-      startTimer();
+      setWord(word);
+      s.emit("clear-canvas");
     });
-
     s.on("new-drawer", ({ drawer: drawerName }) => {
       setDrawer(drawerName);
-      setCurrentWord(""); // Only drawer sees word
-      setHints([]);
-      startTimer();
+      setWord("");
+      s.emit("clear-canvas");
     });
 
-    s.on("chat-message", (msg) => setMessages((prev) => [...prev, msg]));
-
-    s.on("correct-guess", ({ username: winner }) => {
-      setMessages((prev) => [...prev, { system: true, text: `${winner} guessed the word! 🎉` }]);
-      setScores((prev) => ({ ...prev, [winner]: (prev[winner] || 0) + 10 }));
+    // Correct guesses
+    s.on("correct-guess", ({ username: winner, word: correctWord }) => {
+      setMessages(prev => [...prev, { system: true, text: `${winner} guessed the word! (${correctWord}) 🎉` }]);
     });
 
-    s.on("round-update", ({ roundNumber, totalRounds }) => {
-      setRound(roundNumber);
-      setMaxRounds(totalRounds);
-      setTimeLeft(60);
-      setCurrentWord("");
-      setHints([]);
-      if (canvasRef.current) canvasRef.current.clear();
+    // Game start / new round
+    s.on("gameStarted", ({ roundLength }) => {
+      setTimeLeft(roundLength || 90);
+      setRound(1);
+    });
+    s.on("round-update", ({ roundNum, roundLength }) => {
+      setRound(roundNum);
+      setTimeLeft(roundLength);
     });
 
-    s.on("drawing-data", (data) => {
-      if (!isDrawer && canvasRef.current) canvasRef.current.drawFromData(data.path);
-    });
-
-    setGameStarted(true);
+    // Timer tick from server
+    s.on("timer", ({ timeLeft }) => setTimeLeft(timeLeft));
 
     return () => s.disconnect();
-  }, []);
-
-  const startTimer = () => setTimeLeft(60);
-
-  const generateHints = (word) => {
-    return word.split("").map((l) => "_");
-  };
+  }, [roomId, username]);
 
   const sendMessage = () => {
     if (!chatInput.trim() || !socket) return;
-    const trimmed = chatInput.trim();
-
-    // Guess logic
-    if (!isDrawer && currentWord && trimmed.toLowerCase() === currentWord.toLowerCase()) {
-      socket.emit("correct-guess", { username, roomCode: roomId });
-      setMessages((prev) => [...prev, { system: true, text: `${username} guessed the word! 🎉` }]);
-      setScores((prev) => ({ ...prev, [username]: (prev[username] || 0) + 10 }));
-    } else {
-      socket.emit("chat-message", { message: trimmed });
-      setMessages((prev) => [...prev, { username, message: trimmed }]);
-    }
+    socket.emit("chat-message", { message: chatInput });
     setChatInput("");
   };
 
+  const guessWord = (wordGuess) => {
+    if (!wordGuess.trim() || !socket) return;
+    socket.emit("guess-word", { guess: wordGuess });
+    setChatInput("");
+  };
+
+  const isDrawer = drawer === username;
+  const isAdmin = players.find(p => p.username === username)?.isAdmin;
+
   return (
-    <div className="flex flex-col items-center w-full gap-4 p-2 md:p-4 max-w-6xl">
-      {/* Header */}
-      <h2 className="text-3xl font-display text-purple text-center">
-        Room: {roomId} | Round {round}/{maxRounds}
-      </h2>
-
-      {/* Timer */}
-      <div className="w-full h-4 bg-gray-200 rounded overflow-hidden">
-        <div
-          className={`h-4 rounded transition-all duration-500 ${timeLeft < 10 ? "bg-red-500" : "bg-green-400"}`}
-          style={{ width: `${(timeLeft / 60) * 100}%` }}
-        />
-      </div>
-
-      {/* Main Content */}
-      <div className="flex flex-col md:flex-row w-full gap-4">
-        {/* Canvas */}
-        <div className="flex-1">
-          <CanvasWrapper ref={canvasRef} socket={socket} isDrawer={isDrawer} roomId={roomId} />
-          {isDrawer && currentWord && (
-            <Card className="mt-2 p-2 text-center bg-yellow-100 font-bold">
-              🎨 Draw this: <span className="underline">{currentWord}</span>
-            </Card>
-          )}
-          {!isDrawer && hints.length > 0 && (
-            <Card className="mt-2 p-2 text-center bg-blue-100 font-bold">
-              Word: {hints.join(" ")}
-            </Card>
-          )}
+    <div className="flex flex-col items-center w-full p-4 gap-4 max-w-6xl">
+      <h2 className="text-3xl font-display text-purple text-center">Room: {roomId}</h2>
+      <Card className="w-full flex flex-col md:flex-row gap-4 p-4">
+        {/* Left: Canvas */}
+        <div className="flex-1 flex flex-col items-center gap-2">
+          <Canvas socket={socket} isDrawer={isDrawer} width={600} height={400} />
+          {isDrawer && <p className="text-lg font-bold text-pink mt-2">You are drawing: <span className="underline">{word}</span></p>}
+          {!isDrawer && <p className="text-lg font-bold text-blue mt-2">{drawer || "Waiting for drawer"} is drawing...</p>}
+          <p className="text-gray-600 mt-1">Round: {round} | Time Left: {timeLeft}s</p>
         </div>
 
-        {/* Sidebar: Players + Chat */}
-        <div className="flex flex-col w-full md:w-1/3 gap-2">
-          {/* Players */}
-          <Card className="flex flex-col gap-1 p-2">
-            <h3 className="font-bold text-lg">Players & Scores</h3>
-            <ul>
-              {players.map((p) => (
-                <li key={p.socketId} className={`flex justify-between p-1 rounded ${p.isDrawer ? "bg-yellow font-bold" : "bg-blue-100"}`}>
-                  <span>{p.username}</span>
-                  <span>{scores[p.username] || 0} pts</span>
-                  {p.isDrawer && <span>🎨</span>}
+        {/* Right: Players + Chat */}
+        <div className="flex-1 flex flex-col gap-2">
+          <Card className="flex flex-col gap-2">
+            <h3 className="text-lg font-bold">Players</h3>
+            <ul className="flex flex-col gap-1">
+              {players.map(p => (
+                <li key={p.socketId} className={`p-1 rounded ${p.isDrawer ? "bg-yellow font-bold" : "bg-gray-100"}`}>
+                  {p.username} {p.isDrawer ? "🎨" : ""} {p.isAdmin ? "(ADMIN)" : ""} — Score: {p.score || 0}
                 </li>
               ))}
             </ul>
           </Card>
 
-          {/* Chat */}
-          <Card className="flex flex-col p-2">
-            <h3 className="font-bold text-lg">Chat</h3>
-            <ul ref={chatRef} className="flex flex-col gap-1 p-2 border rounded h-60 overflow-y-auto bg-gray-50">
-              {messages.map((m, i) => (
-                <li key={i} className={`${m.system ? "italic text-gray-500" : m.username === username ? "text-right text-purple-600 font-semibold" : ""}`}>
+          <Card className="flex flex-col gap-2 h-[300px] overflow-hidden">
+            <h3 className="text-lg font-bold">Chat {announcement && <span className="text-red-500">— {announcement}</span>}</h3>
+            <div className="flex-1 overflow-y-auto p-2 border rounded flex flex-col gap-1 bg-white">
+              {messages.map((m,i) => (
+                <div key={i} className={m.system ? "italic text-gray-500" : ""}>
                   {m.system ? m.text : `${m.username}: ${m.message}`}
-                </li>
+                </div>
               ))}
-            </ul>
+              <div ref={chatEndRef}></div>
+            </div>
             <div className="flex gap-2 mt-2">
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type a message or guess..."
+                placeholder={isDrawer ? "Guess a word..." : "Type a message..."}
                 className="flex-1 p-2 border rounded"
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                onKeyDown={(e) => {
+                  if(e.key==="Enter") isDrawer ? guessWord(chatInput) : sendMessage();
+                }}
               />
-              <Button onClick={sendMessage}>Send</Button>
+              <Button onClick={() => isDrawer ? guessWord(chatInput) : sendMessage()}>Send</Button>
             </div>
           </Card>
         </div>
-      </div>
+      </Card>
+
+      {/* Global admin controls */}
+      {isAdmin && (
+        <Card className="w-full p-4 mt-4">
+          <h3 className="text-lg font-bold">Admin Controls</h3>
+          <div className="flex flex-col md:flex-row gap-2 mt-2">
+            <Button onClick={() => socket.emit("admin-clear-room")}>Clear Room</Button>
+            <Button onClick={() => socket.emit("admin-restart-round")}>Restart Round</Button>
+            <input
+              type="text"
+              placeholder="Global Announcement"
+              className="flex-1 p-2 border rounded"
+              onKeyDown={(e) => {if(e.key==="Enter") socket.emit("admin-announcement",{message:e.target.value})}}
+            />
+            <Button onClick={() => socket.emit("admin-announcement",{message:announcement})}>Send</Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
