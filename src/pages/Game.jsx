@@ -1,183 +1,286 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { initSocket } from "../utils/socket";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
-import Canvas from "../components/Canvas";
-import Chat from "../components/Chat";
-import { initSocket } from "../utils/socket";
-import { motion } from "framer-motion";
+import Input from "../components/ui/Input";
 
 export default function Game() {
   const { roomId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const username = location.state?.username || "Player";
-  const password = location.state?.password || null;
-  const isPrivate = location.state?.isPrivate || false;
 
   const [socket, setSocket] = useState(null);
   const [players, setPlayers] = useState([]);
   const [drawer, setDrawer] = useState(null);
   const [word, setWord] = useState("");
-  const [round, setRound] = useState(1);
-  const [timer, setTimer] = useState(60);
+  const [maskedWord, setMaskedWord] = useState("");
   const [messages, setMessages] = useState([]);
-  const [hint, setHint] = useState("");
-  const [gameStarted, setGameStarted] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [round, setRound] = useState(1);
+  const [timer, setTimer] = useState(0);
+  const [scores, setScores] = useState({});
+  const [isGameOver, setIsGameOver] = useState(false);
 
-  const timerRef = useRef(null);
-  const chatEndRef = useRef(null);
+  const canvasRef = useRef(null);
+  const ctxRef = useRef(null);
+  const drawing = useRef(false);
 
-  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const isDrawer = drawer === username;
 
+  // ⏱️ Timer countdown
+  useEffect(() => {
+    if (timer <= 0) return;
+    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  // 🎮 Initialize Socket
   useEffect(() => {
     const s = initSocket();
     setSocket(s);
 
-    // Join the room
-    s.emit("joinRoom", { roomId, username, password, isPrivate });
+    s.emit("join-room", { roomCode: roomId, username });
 
-    // Player updates
-    s.on("updatePlayers", (playerList) => setPlayers(playerList));
-    s.on("setDrawer", (drawerName) => setDrawer(drawerName));
-
-    // Game events
-    s.on("newWord", ({ word: newWord, hint: newHint, round: newRound }) => {
-      setWord(newWord);
-      setHint(newHint || "_".repeat(newWord.length));
-      setRound(newRound);
-      setTimer(60);
-      setGameStarted(true);
-
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        setTimer((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    });
-
-    s.on("chatMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-      scrollToBottom();
-    });
-
-    s.on("correctGuess", ({ username: winner, word }) => {
+    // --- Player & Drawer Management ---
+    s.on("player-list", (playerList) => setPlayers(playerList));
+    s.on("set-drawer", ({ drawer }) => setDrawer(drawer));
+    s.on("round-start", ({ word, drawer, round, time }) => {
+      setDrawer(drawer);
+      setRound(round);
+      setTimer(time);
+      if (drawer === username) {
+        setWord(word);
+        setMaskedWord("");
+      } else {
+        setWord("");
+        setMaskedWord("_ ".repeat(word.length));
+      }
       setMessages((prev) => [
         ...prev,
-        { system: true, text: `${winner} guessed the word: "${word}"! 🎉` },
+        { system: true, text: `🎮 Round ${round} started!` },
       ]);
-      scrollToBottom();
+      clearCanvas();
     });
 
-    s.on("gameEnded", () => {
-      setGameStarted(false);
-      setWord("");
-      setHint("");
-      setRound(0);
-      setTimer(0);
+    // --- Drawing Data ---
+    s.on("draw-data", (data) => drawLine(data, false));
+
+    // --- Chat & Guesses ---
+    s.on("chat-message", (msg) => {
+      setMessages((prev) => [...prev, msg]);
     });
 
-    return () => {
-      s.disconnect();
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    s.on("correct-guess", ({ username }) => {
+      setMessages((prev) => [
+        ...prev,
+        { system: true, text: `✅ ${username} guessed the word!` },
+      ]);
+    });
+
+    s.on("round-ended", ({ word }) => {
+      setMessages((prev) => [
+        ...prev,
+        { system: true, text: `🕓 Round ended! The word was "${word}".` },
+      ]);
+    });
+
+    s.on("game-over", (finalScores) => {
+      setScores(finalScores);
+      setIsGameOver(true);
+    });
+
+    s.on("disconnect", () => {
+      setMessages((prev) => [
+        ...prev,
+        { system: true, text: "⚠️ Disconnected from server." },
+      ]);
+    });
+
+    return () => s.disconnect();
   }, []);
 
-  const isDrawer = drawer === username;
+  // 🖌️ Canvas Setup
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.lineCap = "round";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#000000";
+    ctxRef.current = ctx;
+  }, []);
 
-  const sendMessage = (text) => {
-    if (!text.trim() || !socket) return;
-    socket.emit("chatMessage", { message: text });
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = ctxRef.current;
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const handleStartNextRound = () => {
-    if (!socket) return;
-    socket.emit("startNextRound");
+  // 🖍️ Drawing logic
+  const handleMouseDown = (e) => {
+    if (!isDrawer) return;
+    drawing.current = true;
+    const { offsetX, offsetY } = e.nativeEvent;
+    ctxRef.current.beginPath();
+    ctxRef.current.moveTo(offsetX, offsetY);
+  };
+
+  const handleMouseUp = () => {
+    if (!isDrawer) return;
+    drawing.current = false;
+    ctxRef.current.closePath();
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDrawer || !drawing.current) return;
+    const { offsetX, offsetY } = e.nativeEvent;
+    drawLine({ x: offsetX, y: offsetY }, true);
+  };
+
+  const drawLine = (data, emit) => {
+    const ctx = ctxRef.current;
+    ctx.lineTo(data.x, data.y);
+    ctx.stroke();
+    if (emit && socket) socket.emit("drawing", { roomCode: roomId, ...data });
+  };
+
+  // ✉️ Chat System
+  const sendMessage = () => {
+    if (!chatInput.trim() || !socket) return;
+    if (!isDrawer && word && chatInput.toLowerCase() === word.toLowerCase()) {
+      socket.emit("correct-guess", { username });
+    } else {
+      socket.emit("chat-message", { message: chatInput });
+    }
+    setChatInput("");
+  };
+
+  const leaveGame = () => {
+    if (socket) socket.disconnect();
+    navigate("/");
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full min-h-screen p-4 gap-6 bg-gradient-to-tr from-purple-50 via-pink-50 to-blue-50">
-      <motion.h2
-        className="text-4xl font-display text-purple-700 mb-4 drop-shadow-lg text-center"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-      >
-        Room: {roomId} {isPrivate && "🔒"}
-      </motion.h2>
+    <div className="flex flex-col items-center w-full p-2 md:p-4 max-w-6xl mx-auto">
+      <div className="flex justify-between w-full items-center">
+        <h2 className="text-2xl md:text-3xl font-display text-purple">
+          Room: {roomId}
+        </h2>
+        <Button onClick={leaveGame} className="bg-red-500 text-white">
+          Leave Game
+        </Button>
+      </div>
 
-      <Card className="w-full max-w-6xl flex flex-col gap-4 p-4 shadow-2xl bg-white/90 backdrop-blur-md rounded-2xl">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Canvas */}
-          <div className="flex-1 flex flex-col gap-4">
-            <Canvas socket={socket} isDrawer={isDrawer} />
-
-            <div className="flex justify-between items-center p-2 mt-2 bg-purple-50 rounded-lg shadow-inner">
-              <p className="font-semibold text-purple-600">Round: {round}</p>
-              <p className="font-semibold text-purple-600">Time Left: {timer}s</p>
-              <p className="font-semibold text-purple-600">
-                Drawer: {drawer || "Waiting..."}
-              </p>
-            </div>
-
-            {!isDrawer && gameStarted && (
-              <Card className="bg-yellow-50 p-3 rounded-lg shadow-inner mt-2 text-center text-purple-700 font-semibold">
-                Hint: {hint}
-              </Card>
-            )}
-          </div>
-
-          {/* Chat + Players */}
-          <div className="w-full md:w-1/3 flex flex-col gap-4">
-            <Card className="flex flex-col gap-2 h-full">
-              <h3 className="text-lg font-bold text-purple-700">Players</h3>
-              <ul className="flex flex-col gap-1 overflow-y-auto max-h-64 p-2">
-                {players.map((p) => (
-                  <li
-                    key={p.username}
-                    className={`p-2 rounded-lg font-medium ${
-                      p.username === drawer
-                        ? "bg-purple-200 text-purple-900 font-bold"
-                        : "bg-blue-50 text-blue-900"
-                    }`}
-                  >
-                    {p.username} {p.username === drawer ? "🎨" : ""}
-                  </li>
-                ))}
-              </ul>
-
-              <Chat
-                socket={socket}
-                username={username}
-                messages={messages}
-                chatEndRef={chatEndRef}
-              />
-            </Card>
-
-            {isDrawer && gameStarted && (
-              <Button
-                onClick={handleStartNextRound}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-xl"
-              >
-                Start Next Round
-              </Button>
-            )}
-          </div>
-        </div>
+      {/* Drawer and Word Info */}
+      <Card className="w-full mt-3 text-center">
+        {isDrawer ? (
+          <p className="text-xl font-bold text-pink">
+            🎨 You are drawing: <span className="underline">{word}</span>
+          </p>
+        ) : (
+          <p className="text-xl font-bold text-blue">
+            🖌️ {drawer || "Waiting for drawer"} is drawing...
+            <br />
+            <span className="text-gray-600 text-lg">{maskedWord}</span>
+          </p>
+        )}
+        <p className="text-gray-500 mt-1">
+          Round {round} | Time: {timer}s
+        </p>
       </Card>
 
-      <motion.p
-        className="text-center text-gray-700 mt-4 text-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-      >
-        🎨 Draw, guess, and have fun! The drawer sees the word, guessers try to find it.
-      </motion.p>
+      {/* Game Layout */}
+      <div className="flex flex-col md:flex-row gap-4 w-full mt-4">
+        {/* Canvas */}
+        <div className="flex-1 relative">
+          <Card className="p-2">
+            <canvas
+              ref={canvasRef}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+              className={`border rounded w-full h-[300px] md:h-[500px] bg-white ${
+                isDrawer ? "cursor-crosshair" : "cursor-not-allowed opacity-80"
+              }`}
+            />
+          </Card>
+        </div>
+
+        {/* Chat & Players */}
+        <div className="flex flex-col md:w-[35%] gap-4">
+          <Card className="flex flex-col h-[300px] md:h-[500px] p-2 overflow-y-auto">
+            <h3 className="text-lg font-bold mb-1">Players</h3>
+            <ul className="flex flex-col gap-1">
+              {players.map((p) => (
+                <li
+                  key={p.username}
+                  className={`p-1 rounded ${
+                    p.username === drawer
+                      ? "bg-yellow-200 font-semibold"
+                      : "bg-blue-100"
+                  }`}
+                >
+                  {p.username}{" "}
+                  {p.username === drawer && "🎨"}{" "}
+                  <span className="text-gray-500">
+                    ({p.score ?? 0} pts)
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          <Card className="flex flex-col p-2">
+            <h3 className="text-lg font-bold mb-1">Chat</h3>
+            <ul className="flex flex-col flex-1 overflow-y-auto p-1 max-h-[200px] border rounded">
+              {messages.map((m, i) => (
+                <li
+                  key={i}
+                  className={m.system ? "italic text-gray-500" : ""}
+                >
+                  {m.system ? m.text : `${m.username}: ${m.message}`}
+                </li>
+              ))}
+            </ul>
+            <div className="flex mt-2 gap-2">
+              <Input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                placeholder="Type your guess..."
+                disabled={isDrawer}
+              />
+              <Button onClick={sendMessage} disabled={isDrawer}>
+                Send
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Game Over Modal */}
+      {isGameOver && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <Card className="bg-white p-6 rounded-2xl max-w-md w-full text-center">
+            <h2 className="text-2xl font-bold text-pink mb-4">🏁 Game Over!</h2>
+            <ul className="text-left mb-4">
+              {Object.entries(scores)
+                .sort((a, b) => b[1] - a[1])
+                .map(([player, score], idx) => (
+                  <li key={player} className="text-lg">
+                    {idx + 1}. {player} — <b>{score}</b> pts
+                  </li>
+                ))}
+            </ul>
+            <Button onClick={leaveGame} className="bg-green text-white w-full">
+              Back to Home
+            </Button>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
