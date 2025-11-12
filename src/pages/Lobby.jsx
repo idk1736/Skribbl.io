@@ -1,85 +1,81 @@
 import React, { useState, useEffect } from "react";
-import { Users, Palette, Monitor, Sparkles, Home, Loader2, Circle } from "lucide-react";
+import { Users, Gamepad2, PlusCircle, Loader2, Sparkles } from "lucide-react";
 
 // ============================================================================
-// UTILITY COMPONENTS
+// Minimal UI Components
 // ============================================================================
-const GlassCard = ({ children, className = "", hover = false }) => (
+const Card = ({ children, className = "" }) => (
   <div
-    className={`bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 shadow-xl transition-all duration-300 ${
-      hover ? "hover:bg-white/15 hover:shadow-2xl hover:scale-[1.02]" : ""
-    } ${className}`}
+    className={`bg-white/70 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl border border-gray-300 dark:border-gray-700 shadow-lg transition-all duration-300 ${className}`}
   >
     {children}
   </div>
 );
 
-const Button = ({ children, variant = "primary", size = "md", icon: Icon, onClick, disabled, className = "" }) => {
+const Button = ({
+  children,
+  variant = "primary",
+  size = "md",
+  icon: Icon,
+  onClick,
+  disabled,
+  className = "",
+}) => {
   const variants = {
-    primary: "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/50",
-    secondary: "bg-white/10 hover:bg-white/20 text-white border border-white/30",
-    success: "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50",
+    primary:
+      "bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white",
+    secondary:
+      "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600",
+    success:
+      "bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white",
   };
-  const sizes = { sm: "px-3 py-1.5 text-sm", md: "px-6 py-3 text-base", lg: "px-8 py-4 text-lg" };
+  const sizes = {
+    sm: "px-3 py-1.5 text-sm",
+    md: "px-6 py-2.5 text-base",
+    lg: "px-8 py-3.5 text-lg",
+  };
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className={`${variants[variant]} ${sizes[size]} rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
     >
-      {Icon && <Icon size={size === "sm" ? 16 : size === "lg" ? 24 : 20} />}
+      {Icon && (
+        <Icon
+          size={size === "sm" ? 16 : size === "lg" ? 24 : 20}
+          className="opacity-80"
+        />
+      )}
       {children}
     </button>
   );
 };
 
-// ============================================================================
-// ANIMATED BACKGROUND
-// ============================================================================
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 -z-10 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-pink-900" />
-    {[...Array(15)].map((_, i) => (
-      <div
-        key={i}
-        className="absolute rounded-full mix-blend-screen filter blur-xl opacity-30 animate-float"
-        style={{
-          width: `${Math.random() * 300 + 100}px`,
-          height: `${Math.random() * 300 + 100}px`,
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-          background: `radial-gradient(circle, ${["#8b5cf6", "#ec4899", "#3b82f6", "#10b981"][Math.floor(Math.random() * 4)]} 0%, transparent 70%)`,
-          animationDelay: `${Math.random() * 5}s`,
-          animationDuration: `${Math.random() * 10 + 10}s`,
-        }}
-      />
-    ))}
-  </div>
+const Input = ({ placeholder, value, onChange, className = "" }) => (
+  <input
+    placeholder={placeholder}
+    value={value}
+    onChange={onChange}
+    className={`w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-900/60 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+  />
 );
 
 // ============================================================================
-// LOBBY PAGE
+// MAIN LOBBY COMPONENT
 // ============================================================================
 const Lobby = ({ onJoinRoom, onCreateRoom }) => {
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
-  const [publicRooms, setPublicRooms] = useState([]);
   const [activeGames, setActiveGames] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    // Mock Public Rooms
-    setPublicRooms([
-      { id: "ROOM1", players: 3, maxPlayers: 8, isActive: true, host: "Player1" },
-      { id: "ROOM2", players: 2, maxPlayers: 6, isActive: false, host: "Artist99" },
-      { id: "ROOM3", players: 5, maxPlayers: 10, isActive: true, host: "DrawMaster" },
-    ]);
-
-    // Mock Active Games
+    // Example Data
     setActiveGames([
-      { id: "GAME1", host: "Alice", players: 4, maxPlayers: 8 },
-      { id: "GAME2", host: "Bob", players: 2, maxPlayers: 6 },
+      { id: "ROOM1", host: "Alice", players: 3, max: 8 },
+      { id: "ROOM2", host: "Ben", players: 5, max: 10 },
+      { id: "ROOM3", host: "Cleo", players: 2, max: 6 },
     ]);
   }, []);
 
@@ -89,7 +85,7 @@ const Lobby = ({ onJoinRoom, onCreateRoom }) => {
     setTimeout(() => {
       onCreateRoom(username);
       setLoading(false);
-    }, 500);
+    }, 600);
   };
 
   const handleJoin = () => {
@@ -98,111 +94,157 @@ const Lobby = ({ onJoinRoom, onCreateRoom }) => {
     setTimeout(() => {
       onJoinRoom(username, roomCode);
       setLoading(false);
-    }, 500);
+    }, 600);
   };
 
-  const handleQuickJoin = (id) => {
+  const quickJoin = (id) => {
     if (!username.trim()) return;
     setLoading(true);
     setTimeout(() => {
       onJoinRoom(username, id);
       setLoading(false);
-    }, 500);
+    }, 600);
   };
 
   return (
-    <div className="min-h-screen p-4">
-      <AnimatedBackground />
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-white flex flex-col">
+      {/* HEADER */}
+      <header className="py-8 text-center">
+        <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-500 drop-shadow-sm">
+          Skribbl Lobby
+        </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-300 text-lg">
+          Create, Join, or Browse Active Games
+        </p>
+      </header>
 
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400">Skribbl Lobby</h1>
-          <p className="text-xl md:text-2xl text-white/80 font-light mt-2">Join a game or start creating fun!</p>
-        </div>
+      {/* CONTENT */}
+      <main className="flex-grow container mx-auto px-4 grid md:grid-cols-2 gap-8 mb-12">
+        {/* CREATE / JOIN SECTION */}
+        <Card className="p-8 flex flex-col justify-center">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Users className="text-blue-500" /> Get Started
+          </h2>
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter your name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Create / Join */}
-          <GlassCard className="p-8">
-            <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-              <Users className="text-purple-400" />
-              Get Started
-            </h2>
-            <div className="space-y-4">
-              <input
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              {isCreating ? (
-                <Button variant="success" size="lg" icon={Sparkles} onClick={handleCreate} disabled={!username.trim() || loading} className="w-full">
-                  {loading ? <Loader2 className="animate-spin" /> : "Create Room"}
+            {!creating ? (
+              <>
+                <Input
+                  placeholder="Room Code"
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                />
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={handleJoin}
+                  disabled={!username.trim() || !roomCode.trim() || loading}
+                  icon={Users}
+                  className="w-full"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : "Join Room"}
                 </Button>
-              ) : (
-                <>
-                  <input
-                    placeholder="Room code (e.g., ROOM1)"
-                    value={roomCode}
-                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <Button variant="primary" size="lg" icon={Users} onClick={handleJoin} disabled={!username.trim() || !roomCode.trim() || loading} className="w-full">
-                    {loading ? <Loader2 className="animate-spin" /> : "Join Room"}
-                  </Button>
-                </>
-              )}
-              <Button variant="secondary" size="md" onClick={() => setIsCreating(!isCreating)} className="w-full">
-                {isCreating ? "Join Existing Room" : "Create New Room"}
+              </>
+            ) : (
+              <Button
+                variant="success"
+                size="lg"
+                onClick={handleCreate}
+                disabled={!username.trim() || loading}
+                icon={PlusCircle}
+                className="w-full"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : "Create Room"}
               </Button>
-            </div>
-          </GlassCard>
+            )}
 
-          {/* Active / Public Rooms */}
-          <GlassCard className="p-8">
-            <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-              <Monitor className="text-blue-400" />
-              Active Games
-            </h2>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
-              {activeGames.length === 0 ? (
-                <p className="text-white/60 text-center py-12">No active games</p>
-              ) : (
-                activeGames.map((game) => (
-                  <GlassCard key={game.id} hover className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-semibold">{game.id}</p>
-                        <p className="text-sm text-white/60">Host: {game.host}</p>
-                        <p className="text-sm text-white/60">
-                          Players: {game.players}/{game.maxPlayers}
-                        </p>
-                      </div>
-                      <Button variant="primary" size="sm" onClick={() => handleQuickJoin(game.id)} disabled={!username.trim()}>
-                        Join
-                      </Button>
-                    </div>
-                  </GlassCard>
-                ))
-              )}
-            </div>
-          </GlassCard>
-        </div>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setCreating(!creating)}
+              className="w-full"
+            >
+              {creating ? "Join an Existing Room" : "Create New Room"}
+            </Button>
+          </div>
+        </Card>
 
-        {/* Features */}
-        <div className="grid md:grid-cols-3 gap-6 mt-12">
+        {/* ACTIVE GAMES SECTION */}
+        <Card className="p-8">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Gamepad2 className="text-indigo-500" /> Active Games
+          </h2>
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2 custom-scrollbar">
+            {activeGames.length === 0 ? (
+              <p className="text-gray-600 dark:text-gray-400 text-center py-12">
+                No active games currently.
+              </p>
+            ) : (
+              activeGames.map((g) => (
+                <div
+                  key={g.id}
+                  className="flex justify-between items-center p-4 bg-white/80 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all"
+                >
+                  <div>
+                    <p className="font-semibold text-lg">{g.id}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Host: {g.host}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Players: {g.players}/{g.max}
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => quickJoin(g.id)}
+                    disabled={!username.trim() || loading}
+                  >
+                    Join
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </main>
+
+      {/* FEATURES SECTION */}
+      <section className="bg-white/70 dark:bg-gray-800/70 py-10 border-t border-gray-200 dark:border-gray-700">
+        <div className="container mx-auto px-4 grid sm:grid-cols-3 gap-8 text-center">
           {[
-            { icon: Palette, title: "Draw & Create", desc: "Express yourself with smooth drawing tools" },
-            { icon: Users, title: "Chat & Guess", desc: "Play and chat with friends in real time" },
-            { icon: Sparkles, title: "Compete & Win", desc: "Climb leaderboards and show off" },
-          ].map((feature, i) => (
-            <GlassCard key={i} hover className="p-6 text-center">
-              <feature.icon size={48} className="mx-auto mb-4 text-purple-400" />
-              <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
-              <p className="text-white/60">{feature.desc}</p>
-            </GlassCard>
+            {
+              icon: Users,
+              title: "Play with Friends",
+              desc: "Instantly join or create custom lobbies.",
+            },
+            {
+              icon: Sparkles,
+              title: "Customizable Games",
+              desc: "Set your own rounds, word lists, and settings.",
+            },
+            {
+              icon: Gamepad2,
+              title: "Live Multiplayer",
+              desc: "Experience smooth, fast real-time gameplay.",
+            },
+          ].map((f, i) => (
+            <div key={i} className="space-y-2">
+              <f.icon
+                size={40}
+                className="mx-auto text-blue-500 dark:text-indigo-400"
+              />
+              <h3 className="text-lg font-semibold">{f.title}</h3>
+              <p className="text-gray-600 dark:text-gray-400">{f.desc}</p>
+            </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 };
