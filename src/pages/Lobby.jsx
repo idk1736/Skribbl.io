@@ -1,184 +1,210 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Users, Globe, LogIn, PlusCircle, RefreshCw, Crown, MessageSquare } from "lucide-react";
-import { io } from "socket.io-client";
+import { Users, Palette, Monitor, Sparkles, Home, Loader2, Circle } from "lucide-react";
 
-// --- Utility Components ---
-const Card = ({ children, className = "" }) => (
-  <div className={`bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl rounded-2xl p-4 ${className}`}>
+// ============================================================================
+// UTILITY COMPONENTS
+// ============================================================================
+const GlassCard = ({ children, className = "", hover = false }) => (
+  <div
+    className={`bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 shadow-xl transition-all duration-300 ${
+      hover ? "hover:bg-white/15 hover:shadow-2xl hover:scale-[1.02]" : ""
+    } ${className}`}
+  >
     {children}
   </div>
 );
 
-const CardHeader = ({ children }) => <div className="mb-2 font-semibold text-indigo-200 text-lg">{children}</div>;
-const CardContent = ({ children, className = "" }) => <div className={className}>{children}</div>;
+const Button = ({ children, variant = "primary", size = "md", icon: Icon, onClick, disabled, className = "" }) => {
+  const variants = {
+    primary: "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/50",
+    secondary: "bg-white/10 hover:bg-white/20 text-white border border-white/30",
+    success: "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50",
+  };
+  const sizes = { sm: "px-3 py-1.5 text-sm", md: "px-6 py-3 text-base", lg: "px-8 py-4 text-lg" };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${variants[variant]} ${sizes[size]} rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+    >
+      {Icon && <Icon size={size === "sm" ? 16 : size === "lg" ? 24 : 20} />}
+      {children}
+    </button>
+  );
+};
 
-const Button = ({ children, onClick, className = "" }) => (
-  <button
-    onClick={onClick}
-    className={`bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg transition-all ${className}`}
-  >
-    {children}
-  </button>
+// ============================================================================
+// ANIMATED BACKGROUND
+// ============================================================================
+const AnimatedBackground = () => (
+  <div className="fixed inset-0 -z-10 overflow-hidden">
+    <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-pink-900" />
+    {[...Array(15)].map((_, i) => (
+      <div
+        key={i}
+        className="absolute rounded-full mix-blend-screen filter blur-xl opacity-30 animate-float"
+        style={{
+          width: `${Math.random() * 300 + 100}px`,
+          height: `${Math.random() * 300 + 100}px`,
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          background: `radial-gradient(circle, ${["#8b5cf6", "#ec4899", "#3b82f6", "#10b981"][Math.floor(Math.random() * 4)]} 0%, transparent 70%)`,
+          animationDelay: `${Math.random() * 5}s`,
+          animationDuration: `${Math.random() * 10 + 10}s`,
+        }}
+      />
+    ))}
+  </div>
 );
 
-const Input = ({ value, onChange, placeholder, className = "", onKeyDown }) => (
-  <input
-    value={value}
-    onChange={onChange}
-    placeholder={placeholder}
-    onKeyDown={onKeyDown}
-    className={`w-full px-3 py-2 rounded-lg bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all ${className}`}
-  />
-);
-
-// --- Socket ---
-const socket = io("/", { transports: ["websocket"] });
-
-export default function Lobby() {
+// ============================================================================
+// LOBBY PAGE
+// ============================================================================
+const Lobby = ({ onJoinRoom, onCreateRoom }) => {
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
-  const [rooms, setRooms] = useState([]);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [message, setMessage] = useState("");
-  const [announcements, setAnnouncements] = useState([]);
-
-  // Fetch active rooms
-  const fetchRooms = async () => {
-    try {
-      const res = await fetch("/api/rooms");
-      const data = await res.json();
-      setRooms(data.rooms || []);
-    } catch (err) {
-      console.error("Failed to fetch rooms", err);
-    }
-  };
+  const [publicRooms, setPublicRooms] = useState([]);
+  const [activeGames, setActiveGames] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 8000);
+    // Mock Public Rooms
+    setPublicRooms([
+      { id: "ROOM1", players: 3, maxPlayers: 8, isActive: true, host: "Player1" },
+      { id: "ROOM2", players: 2, maxPlayers: 6, isActive: false, host: "Artist99" },
+      { id: "ROOM3", players: 5, maxPlayers: 10, isActive: true, host: "DrawMaster" },
+    ]);
 
-    socket.on("global-chat", (msg) => setChatMessages((prev) => [...prev, msg]));
-    socket.on("announcement", (msg) => setAnnouncements((prev) => [msg, ...prev.slice(0, 4)]));
-
-    return () => clearInterval(interval);
+    // Mock Active Games
+    setActiveGames([
+      { id: "GAME1", host: "Alice", players: 4, maxPlayers: 8 },
+      { id: "GAME2", host: "Bob", players: 2, maxPlayers: 6 },
+    ]);
   }, []);
 
-  const sendMessage = () => {
-    if (!message.trim() || !username.trim()) return;
-    socket.emit("global-chat", { username, message });
-    setMessage("");
+  const handleCreate = () => {
+    if (!username.trim()) return;
+    setLoading(true);
+    setTimeout(() => {
+      onCreateRoom(username);
+      setLoading(false);
+    }, 500);
   };
 
-  const handleCreateRoom = () => {
-    if (!username.trim()) return alert("Enter username!");
-    socket.emit("create-room", { username });
+  const handleJoin = () => {
+    if (!username.trim() || !roomCode.trim()) return;
+    setLoading(true);
+    setTimeout(() => {
+      onJoinRoom(username, roomCode);
+      setLoading(false);
+    }, 500);
   };
 
-  const handleJoinRoom = () => {
-    if (!username.trim() || !roomCode.trim()) return alert("Enter username & room code!");
-    socket.emit("join-room", { username, roomCode });
+  const handleQuickJoin = (id) => {
+    if (!username.trim()) return;
+    setLoading(true);
+    setTimeout(() => {
+      onJoinRoom(username, id);
+      setLoading(false);
+    }, 500);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 flex flex-col items-center p-4 text-white">
-      <motion.h1
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-5xl font-extrabold bg-gradient-to-r from-purple-400 via-indigo-300 to-blue-400 text-transparent bg-clip-text mb-4"
-      >
-        Scribbly Royale
-      </motion.h1>
-      <p className="text-indigo-300 mb-8 text-lg">Create, Join, and Compete — live global chat!</p>
+    <div className="min-h-screen p-4">
+      <AnimatedBackground />
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 w-full max-w-7xl flex-grow">
-        {/* Create / Join */}
-        <div className="space-y-4 lg:col-span-1">
-          <Card>
-            <CardHeader>Join or Create Room</CardHeader>
-            <CardContent className="space-y-2">
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
-              <div className="flex gap-2">
-                <Input value={roomCode} onChange={(e) => setRoomCode(e.target.value)} placeholder="Room Code" />
-                <Button onClick={handleJoinRoom}>
-                  <LogIn className="inline w-4 h-4 mr-1" /> Join
-                </Button>
-              </div>
-              <Button onClick={handleCreateRoom}>
-                <PlusCircle className="inline w-4 h-4 mr-1" /> Create
-              </Button>
-            </CardContent>
-          </Card>
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12 animate-fade-in">
+          <h1 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400">Skribbl Lobby</h1>
+          <p className="text-xl md:text-2xl text-white/80 font-light mt-2">Join a game or start creating fun!</p>
         </div>
 
-        {/* Active Rooms */}
-        <div className="lg:col-span-2 flex flex-col">
-          <Card className="flex flex-col flex-grow">
-            <CardHeader className="flex justify-between items-center">
-              <span className="flex items-center gap-2">
-                <Globe className="w-5 h-5" /> Active Games
-              </span>
-              <Button onClick={fetchRooms} className="bg-indigo-500 hover:bg-indigo-600">
-                <RefreshCw className="inline w-4 h-4" /> Refresh
-              </Button>
-            </CardHeader>
-            <CardContent className="overflow-y-auto flex-grow mt-2 space-y-2">
-              {rooms.length === 0 ? (
-                <p className="text-indigo-300 text-center">No active rooms</p>
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Create / Join */}
+          <GlassCard className="p-8">
+            <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
+              <Users className="text-purple-400" />
+              Get Started
+            </h2>
+            <div className="space-y-4">
+              <input
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              {isCreating ? (
+                <Button variant="success" size="lg" icon={Sparkles} onClick={handleCreate} disabled={!username.trim() || loading} className="w-full">
+                  {loading ? <Loader2 className="animate-spin" /> : "Create Room"}
+                </Button>
               ) : (
-                rooms.map((room, idx) => (
-                  <Card key={idx} className="p-3 cursor-pointer hover:scale-105 transition-all">
-                    <div className="flex justify-between items-center">
+                <>
+                  <input
+                    placeholder="Room code (e.g., ROOM1)"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <Button variant="primary" size="lg" icon={Users} onClick={handleJoin} disabled={!username.trim() || !roomCode.trim() || loading} className="w-full">
+                    {loading ? <Loader2 className="animate-spin" /> : "Join Room"}
+                  </Button>
+                </>
+              )}
+              <Button variant="secondary" size="md" onClick={() => setIsCreating(!isCreating)} className="w-full">
+                {isCreating ? "Join Existing Room" : "Create New Room"}
+              </Button>
+            </div>
+          </GlassCard>
+
+          {/* Active / Public Rooms */}
+          <GlassCard className="p-8">
+            <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
+              <Monitor className="text-blue-400" />
+              Active Games
+            </h2>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+              {activeGames.length === 0 ? (
+                <p className="text-white/60 text-center py-12">No active games</p>
+              ) : (
+                activeGames.map((game) => (
+                  <GlassCard key={game.id} hover className="p-4">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-semibold text-indigo-100">Room {room.roomCode}</p>
-                        <p className="text-sm text-indigo-300">{room.playerCount} players</p>
+                        <p className="text-white font-semibold">{game.id}</p>
+                        <p className="text-sm text-white/60">Host: {game.host}</p>
+                        <p className="text-sm text-white/60">
+                          Players: {game.players}/{game.maxPlayers}
+                        </p>
                       </div>
-                      {room.gameStarted && <Crown className="text-yellow-400 w-5 h-5" />}
+                      <Button variant="primary" size="sm" onClick={() => handleQuickJoin(game.id)} disabled={!username.trim()}>
+                        Join
+                      </Button>
                     </div>
-                  </Card>
+                  </GlassCard>
                 ))
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </GlassCard>
         </div>
 
-        {/* Global Chat & Announcements */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card className="flex flex-col h-72">
-            <CardHeader className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" /> Global Chat
-            </CardHeader>
-            <CardContent className="flex flex-col flex-grow overflow-y-auto mb-2">
-              {chatMessages.map((msg, i) => (
-                <p key={i} className="text-sm">
-                  <span className="text-indigo-300 font-semibold">{msg.username}: </span>
-                  <span className="text-indigo-100">{msg.message}</span>
-                </p>
-              ))}
-            </CardContent>
-            <div className="flex gap-2">
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder="Type message..."
-              />
-              <Button onClick={sendMessage}>Send</Button>
-            </div>
-          </Card>
-
-          <Card className="h-40 overflow-y-auto">
-            <CardHeader>Announcements</CardHeader>
-            <CardContent>
-              {announcements.map((a, i) => (
-                <p key={i} className="text-sm text-indigo-100">
-                  🔔 {a.message}
-                </p>
-              ))}
-            </CardContent>
-          </Card>
+        {/* Features */}
+        <div className="grid md:grid-cols-3 gap-6 mt-12">
+          {[
+            { icon: Palette, title: "Draw & Create", desc: "Express yourself with smooth drawing tools" },
+            { icon: Users, title: "Chat & Guess", desc: "Play and chat with friends in real time" },
+            { icon: Sparkles, title: "Compete & Win", desc: "Climb leaderboards and show off" },
+          ].map((feature, i) => (
+            <GlassCard key={i} hover className="p-6 text-center">
+              <feature.icon size={48} className="mx-auto mb-4 text-purple-400" />
+              <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
+              <p className="text-white/60">{feature.desc}</p>
+            </GlassCard>
+          ))}
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default Lobby;
